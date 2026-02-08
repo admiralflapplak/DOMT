@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Deck of Many Things</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- CORE --- */
+        body {
+            background-color: #050505;
+            background-image: radial-gradient(circle at center, #1f1a1a 0%, #000 90%);
+            color: #e0e0e0;
+            font-family: 'Cinzel', serif;
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            user-select: none;
+        }
+
+        /* --- CURSOR OVERRIDE --- */
+        * { cursor: none !important; }
+
+        /* --- UI --- */
+        #ui-layer {
+            position: absolute; top: 5%; 
+            z-index: 9000; 
+            text-align: center;
+            transition: opacity 0.5s; width: 100%;
+        }
+
+        h1 { font-size: 3rem; text-shadow: 0 0 20px rgba(212, 175, 55, 0.5); margin-bottom: 5px; color: #d4af37; position: relative; z-index: 9000; }
+        p { color: #aaa; margin-bottom: 15px; font-size: 1.1rem; }
+        
+        /* --- CUSTOM INPUT STYLING --- */
+        .input-group {
+            display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;
+        }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        input {
+            background: transparent; border: none; border-bottom: 2px solid #d4af37;
+            color: #fff; font-size: 2.5rem; width: 60px; text-align: center; font-family: 'Cinzel', serif;
+        }
+        input:focus { outline: none; border-bottom: 2px solid #fff; }
+
+        .qty-btn {
+            background: transparent; border: 1px solid #444; color: #d4af37;
+            font-family: 'Cinzel', serif; font-size: 1.5rem; width: 40px; height: 40px;
+            cursor: pointer; border-radius: 4px; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .qty-btn:hover { background: #d4af37; color: #000; border-color: #d4af37; box-shadow: 0 0 10px rgba(212,175,55,0.4); }
+
+        .main-btn {
+            background: #d4af37; color: #111; border: none; padding: 12px 35px;
+            font-family: 'Cinzel', serif; font-weight: bold; font-size: 1.1rem;
+            margin-top: 10px; border-radius: 4px;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.3); transition: transform 0.2s, background 0.2s;
+        }
+        .main-btn:hover { transform: scale(1.05); background: #fff; }
+        
+        .reset-link { display: block; margin-top: 20px; color: #555; font-size: 0.8rem; text-decoration: underline; cursor: pointer; }
+        #audio-toggle { position: absolute; top: 20px; right: 20px; z-index: 500; font-size: 1.5rem; color: #555; cursor: pointer; }
+        #audio-toggle.active { color: #d4af37; text-shadow: 0 0 10px #d4af37; }
+
+        /* --- THE DECK --- */
+        .deck-container {
+            position: absolute; top: 55%; left: 50%; transform: translate(-50%, -50%);
+            width: 200px; height: 280px; 
+            perspective: 800px; 
+            z-index: 50; 
+            pointer-events: none; 
+        }
+        .deck-card {
+            position: absolute; width: 100%; height: 100%;
+            transform-origin: center center;
+            background-color: #111; border-radius: 12px;
+            background-image: url('DOMT_back.png');
+            background-position: center;
+            background-size: cover;
+            
+            /* --- RIM LIGHT + SHADOW --- */
+            box-shadow: 
+                0 0 0 1px #222, /* Physical Edge */
+                0 0 1px 1px rgba(255, 255, 255, 0.15), /* Rim Light */
+                0 5px 15px rgba(0,0,0,0.8); /* Depth Shadow */
+        }
+
+        /* --- FLYING CARDS --- */
+        #void-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; perspective: 1200px; 
+            z-index: 1000; 
+        }
+
+        .game-card {
+            width: 200px; height: 280px; position: absolute;
+            transform-style: preserve-3d; pointer-events: auto;
+            will-change: transform;
+        }
+
+        /* --- CARD STRUCTURE --- */
+        .card-inner {
+            position: relative; width: 100%; height: 100%;
+            transform-style: preserve-3d;
+            border-radius: 12px;
+        }
+
+        .card-face {
+            position: absolute; width: 100%; height: 100%;
+            backface-visibility: hidden; 
+            -webkit-backface-visibility: hidden;
+            border-radius: 12px;
+            overflow: hidden; 
+            
+            /* --- RIM LIGHT + SHADOW ON FACES --- */
+            box-shadow: 
+                0 0 0 1px #222, 
+                0 0 1px 1px rgba(255, 255, 255, 0.15), 
+                0 10px 30px rgba(0,0,0,1); /* Deeper shadow for flying cards */
+        }
+        
+        .face-back {
+            background-color: #111;
+            background-image: url('DOMT_back.png');
+            background-position: center;
+            background-size: cover;
+        }
+
+        .face-front {
+            background-color: #000;
+            transform: rotateY(180deg) translateZ(1px); 
+            transition: box-shadow 0.5s ease;
+        }
+
+        /* LAYER A: PARALLAX ART */
+        .layer-art {
+            position: absolute; top: -10%; left: -10%; 
+            width: 120%; height: 120%; 
+            background-size: cover; background-position: center;
+            z-index: 1; transition: transform 0.5s ease-out; 
+        }
+
+        /* LAYER B: STATIC FRAME */
+        .layer-frame {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 2; pointer-events: none;
+            background-size: 100% 100%; background-position: center; background-repeat: no-repeat;
+            /* Inner shadow to separate Frame from Art */
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8); 
+        }
+
+        /* LAYER C: TEXTURE / SCRATCHES */
+        .card-texture {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 2; /* Above art, below glare */
+            opacity: 0.15; /* Subtle */
+            background-image: url('https://www.transparenttextures.com/patterns/stardust.png'); 
+            mix-blend-mode: screen; /* Lightens the blacks */
+            border-radius: 12px;
+        }
+
+        /* HOVER GLOW (Intensifies Rim Light) */
+        .game-card:hover .face-front {
+            box-shadow: 
+                0 0 20px 2px rgba(212, 175, 55, 0.5), /* Gold Glow */
+                0 0 1px 1px rgba(255, 255, 255, 0.8), /* Bright Rim */
+                0 20px 50px rgba(0,0,0,1); /* Deepest Shadow */
+        }
+
+        /* --- GLARE --- */
+        .card-glare {
+            position: absolute; top: -100%; left: -100%;
+            width: 300%; height: 300%; pointer-events: none;
+            background: linear-gradient(115deg, rgba(255,255,255,0) 45%, rgba(255,255,255,0.4) 48%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.4) 52%, rgba(255,255,255,0) 55%);
+            mix-blend-mode: plus-lighter; opacity: 0; z-index: 4;
+        }
+
+        /* --- OVERLAYS --- */
+        #focus-overlay {
+            position: fixed; bottom: 15%; left: 50%; transform: translateX(-50%);
+            text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.5s;
+            z-index: 5000; width: 90%; max-width: 800px;
+        }
+        #focus-overlay.visible { opacity: 1; pointer-events: auto; }
+
+        .ghost-title { font-size: 3rem; color: #d4af37; margin: 0; text-transform: uppercase; letter-spacing: 3px; text-shadow: 0 0 15px rgba(212, 175, 55, 0.6); }
+        .ghost-desc-container { margin-top: 10px; perspective: 500px; }
+        .ghost-desc { 
+            font-family: 'UnifrakturMaguntia', cursive; font-size: 1.6rem; color: #aaffff; 
+            line-height: 1.4; text-shadow: 0 0 5px rgba(170,255,255,0.3); 
+            animation: ectoplasm 4s ease-in-out infinite;
+        }
+        @keyframes ectoplasm {
+            0%, 100% { opacity: 0.9; transform: scale(1); filter: blur(0px); }
+            50% { opacity: 0.7; transform: scale(1.02); filter: blur(0.5px); }
+        }
+
+        #controls-overlay {
+            position: fixed; bottom: 7%; left: 50%; transform: translateX(-50%);
+            z-index: 5010; opacity: 0; pointer-events: none; transition: opacity 0.5s;
+        }
+        #controls-overlay.visible { opacity: 1; pointer-events: auto; }
+        .fade-warning { color: #ff4444; font-size: 1rem; display: block; margin-top:5px; font-weight: bold; letter-spacing: 1px;}
+
+        /* --- ATMOSPHERE --- */
+        .vignette-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 8000;
+            --cursor-x: 50vw; --cursor-y: 50vh;
+            background: radial-gradient(circle 1200px at var(--cursor-x) var(--cursor-y), transparent 5%, rgba(0, 0, 0, 0.4) 30%, rgba(0, 0, 0, 0.95) 70%);
+        }
+        .texture-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 8001; opacity: 0.1;
+            background-image: url("https://www.transparenttextures.com/patterns/stardust.png"); 
+            mix-blend-mode: lighten;
+        }
+        .dust-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 8002;
+            background-image: url('https://www.transparenttextures.com/patterns/green-dust-and-scratches.png'); 
+            background-size: 200px; opacity: 0.1; animation: drift 120s linear infinite;
+        }
+        .dust-layer-2 {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 8001;
+            background-image: url('https://www.transparenttextures.com/patterns/green-dust-and-scratches.png'); 
+            background-size: 300px; opacity: 0.05; animation: drift-deep 200s linear infinite;
+        }
+        @keyframes drift { 0% { background-position: 0 0; } 100% { background-position: 1000px 500px; } }
+        @keyframes drift-deep { 0% { background-position: 0 0; } 100% { background-position: -400px 600px; } }
+
+        /* --- CURSOR WISP --- */
+        #cursor-wisp {
+            position: fixed; top: 0; left: 0;
+            width: 20px; height: 20px;
+            background: radial-gradient(circle, #fff 0%, rgba(212,175,55,0.5) 40%, transparent 80%);
+            border-radius: 50%; pointer-events: none; mix-blend-mode: screen; z-index: 10000;
+            transform: translate(-50%, -50%);
+            transition: transform 0.2s, background 0.2s; 
+        }
+        #cursor-wisp.hover-active {
+            transform: translate(-50%, -50%) scale(1.8);
+            background: radial-gradient(circle, #ffaaaa 0%, rgba(255, 50, 50, 0.6) 40%, transparent 80%);
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
+        }
+
+        /* --- CHOICE BUTTONS --- */
+        #choice-container { display: flex; flex-direction: row; gap: 20px; }
+        .choice-btn {
+            background: #1a1a1a; border: 1px solid #d4af37; color: #d4af37;
+            padding: 15px 25px; font-family: 'Cinzel', serif; font-size: 1rem;
+            transition: all 0.3s ease; text-transform: uppercase;
+            letter-spacing: 1px; min-width: 200px;
+        }
+        .choice-btn.safe:hover { background: #d4af37; color: #000; box-shadow: 0 0 15px rgba(212, 175, 55, 0.5); }
+        .choice-btn.risk { border-color: #ff4444; color: #ff4444; }
+        .choice-btn.risk:hover { background: #550000; color: #fff; box-shadow: 0 0 20px rgba(255, 0, 0, 0.6); transform: scale(1.05); }
+
+    </style>
+</head>
+<body>
+
+    <div id="cursor-wisp"></div>
+
+    <div class="vignette-layer"></div>
+    <div class="texture-layer"></div>
+    <div class="dust-layer"></div>
+    <div class="dust-layer-2"></div>
+
+    <div id="audio-toggle" onclick="SoundController.toggle()">🔇</div>
+
+    <div id="ui-layer">
+        <h1>Deck of Many Things</h1>
+        <p id="deck-count-display">Loading Arcane Deck...</p>
+        <p>How many cards will you draw?</p>
+        
+        <div class="input-group">
+            <button class="qty-btn" onclick="adjustDrawCount(-1)">-</button>
+            <input type="number" id="draw-count" min="1" max="22" value="1" readonly>
+            <button class="qty-btn" onclick="adjustDrawCount(1)">+</button>
+        </div>
+        
+        <button class="main-btn" onclick="startDeal()">Draw Fate</button>
+        <span class="reset-link" onclick="fullReset()">Reset Deck & History</span>
+    </div>
+
+    <div id="void-container"></div>
+
+    <div class="deck-container" id="visual-deck"></div>
+
+    <div id="focus-overlay">
+        <h2 class="ghost-title" id="card-title"></h2>
+        <div class="ghost-desc-container">
+            <p class="ghost-desc" id="card-desc"></p>
+        </div>
+        <span id="vanish-msg" class="fade-warning"></span>
+    </div>
+    
+    <div id="controls-overlay">
+        <button id="btn-next" class="main-btn" onclick="discardAndNext()">Next Card</button>
+        <div id="choice-container" style="display:none; gap: 20px; justify-content: center;">
+            <button id="btn-choice-a" class="choice-btn safe" onclick="handleChoice('safe')"></button>
+            <button id="btn-choice-b" class="choice-btn risk" onclick="handleChoice('risk')"></button>
+        </div>
+    </div>
+
+<script>
+    // --- 1. FULL DATA SET ---
+    const FULL_DECK_DATA = [
+        { 
+            id: 'balance', name: "Balance", type: "standard", 
+            img: "https://placehold.co/1000x1400/222/white?text=Balance+Art", 
+            frame: "https://placehold.co/1000x1400/transparent/d4af37?text=Balance+Frame",
+            desc: "Your mind suffers a wrenching alteration, causing your alignment to change. Lawful becomes chaotic, good becomes evil, and vice versa." 
+        },
+        { 
+            id: 'comet', name: "Comet", type: "standard", 
+            img: "https://placehold.co/1000x1400/222/white?text=Comet+Art",
+            frame: "https://placehold.co/1000x1400/transparent/d4af37?text=Comet+Frame",
+            desc: "If you single-handedly defeat the next hostile monster or group of monsters you encounter, you gain experience points enough to gain one level." 
+        },
+        { 
+            id: 'donjon', name: "Donjon", type: "unique", 
+            img: "https://placehold.co/1000x1400/000/red?text=Donjon+Art",
+            frame: "https://placehold.co/1000x1400/transparent/ff4444?text=Jail+Frame",
+            desc: "You disappear and become entombed in a state of suspended animation in an extradimensional sphere. You draw no more cards." 
+        },
+        { 
+            id: 'euryale', name: "Euryale", type: "standard", 
+            img: "DOMT_medusa_back.png", 
+            frame: "DOMT_medusa_front.png",
+            desc: "The card's medusa-like visage curses you. You take a -2 penalty on saving throws while cursed in this way." 
+        },
+        { 
+            id: 'fates', name: "The Fates", type: "standard", 
+            img: "https://placehold.co/1000x1400/222/white?text=Fates+Art", 
+            frame: "https://placehold.co/1000x1400/transparent/d4af37?text=Fates+Frame",
+            desc: "Reality's fabric unravels and spins anew, allowing you to avoid or erase one event as if it never happened." 
+        },
+        { 
+            id: 'flames', name: "Flames", type: "standard", 
+            img: "DOMT_flames_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "A powerful devil becomes your enemy. The devil seeks your ruin and plagues your life." 
+        },
+        { 
+            id: 'fool', name: "The Fool", type: "unique", 
+            img: "https://placehold.co/1000x1400/222/white?text=Fool+Art", 
+            frame: "https://placehold.co/1000x1400/transparent/d4af37?text=Fool+Frame",
+            desc: "You lose 10,000 XP, discard this card, and draw from the deck again, counting both draws as one of your declared draws." 
+        },
+        { 
+            id: 'gem', name: "Gem", type: "standard", 
+            img: "https://placehold.co/1000x1400/222/white?text=Gem+Art", 
+            frame: "https://placehold.co/1000x1400/transparent/d4af37?text=Gem+Frame",
+            desc: "Twenty-five pieces of jewelry worth 2,000 gp each or fifty gems worth 1,000 gp each appear at your feet." 
+        },
+        { 
+            id: 'idiot', name: "Idiot", type: "unique", 
+            img: "https://placehold.co/1000x1400/222/white?text=Idiot+Art", 
+            frame: "https://placehold.co/1000x1400/transparent/d4af37?text=Idiot+Frame",
+            desc: "Permanently reduce your Intelligence by 1d4 + 1 (to a minimum score of 1). You can draw one additional card." 
+        },
+        { 
+            id: 'jester', name: "Jester", type: "unique", 
+            img: "DOMT_jester_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "You gain 10,000 XP, or you can draw two additional cards beyond your declared draws." 
+        },
+        { 
+            id: 'key', name: "Key", type: "standard", 
+            img: "DOMT_key_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "A rare or rarer magic weapon with which you are proficient appears in your hands." 
+        },
+        { 
+            id: 'knight', name: "Knight", type: "standard", 
+            img: "DOMT_knight_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "You gain the service of a 4th-level fighter who appears in a space you choose within 30 feet of you." 
+        },
+        { 
+            id: 'moon', name: "Moon", type: "standard", 
+            img: "DOMT_moon_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "You are granted the ability to cast the wish spell 1d3 times." 
+        },
+        { 
+            id: 'rogue', name: "Rogue", type: "standard", 
+            img: "DOMT_rogue_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "A nonplayer character of the DM's choice becomes hostile toward you." 
+        },
+        { 
+            id: 'ruin', name: "Ruin", type: "standard", 
+            img: "DOMT_ruin_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "All forms of wealth that you carry or own, other than magic items, are lost to you." 
+        },
+        { 
+            id: 'skull', name: "Skull", type: "standard", 
+            img: "DOMT_skull_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "You summon an avatar of death. It appears within 10 feet of you and attacks you." 
+        },
+        { 
+            id: 'star', name: "Star", type: "standard", 
+            img: "DOMT_star_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "Increase one of your ability scores by 2. The score can exceed 20 but can't exceed 24." 
+        },
+        { 
+            id: 'sun', name: "Sun", type: "standard", 
+            img: "DOMT_sun_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "You gain 50,000 XP, and a wondrous item (which the DM determines randomly) appears in your hands." 
+        },
+        { 
+            id: 'talons', name: "Talons", type: "unique", 
+            img: "https://placehold.co/1000x1400/222/white?text=Talons+Art", 
+            frame: "https://placehold.co/1000x1400/transparent/d4af37?text=Talons+Frame",
+            desc: "Every magic item you wear or carry disintegrates. Artifacts in your possession aren't destroyed but do vanish." 
+        },
+        { 
+            id: 'throne', name: "Throne", type: "standard", 
+            img: "DOMT_throne_back.png", 
+            frame: "DOMT_Gen_Front.png",
+            desc: "You gain proficiency in the Persuasion skill (double proficiency). In addition, you gain rightful ownership of a small keep." 
+        },
+        { 
+            id: 'vizier', name: "Vizier", type: "standard", 
+            img: "https://placehold.co/1000x1400/222/white?text=Vizier+Art", 
+            frame: "https://placehold.co/1000x1400/transparent/d4af37?text=Vizier+Frame",
+            desc: "At any time you choose within one year of drawing this card, you can ask a question in meditation and mentally receive a truthful answer." 
+        },
+        { 
+            id: 'void', name: "The Void", type: "unique", 
+            img: "DOMT_void_back.png", 
+            frame: "DOMT_void_back.png",
+            desc: "Your soul is drawn from your body and contained in an object in a place of the DM's choice. You draw no more cards." 
+        }
+    ];
+
+    const SoundController = {
+        muted: true,
+        files: {
+            deal: new Audio('sfx/deal.mp3'),
+            flip: new Audio('sfx/flip.mp3'),
+            burn: new Audio('sfx/burn.mp3')
+        },
+        init: function() { Object.values(this.files).forEach(s => s.load()); },
+        play: function(key) {
+            if(this.muted) return;
+            const sound = this.files[key];
+            if(sound) { sound.currentTime = 0; sound.play().catch(e => console.log("Audio play blocked", e)); }
+        },
+        toggle: function() {
+            this.muted = !this.muted;
+            const el = document.getElementById('audio-toggle');
+            el.innerHTML = this.muted ? "🔇" : "🔊";
+            el.classList.toggle('active', !this.muted);
+        }
+    };
+
+    let activeDeck = [];
+    let drawQueue = [];
+    let currentFocusCard = null;
+    let isInteractionEnabled = false; 
+    let isDeckLocked = false; 
+
+    // --- LANTERN & WISP VARIABLES ---
+    let targetX = window.innerWidth / 2;
+    let targetY = window.innerHeight / 2;
+    let lanternX = window.innerWidth / 2;
+    let lanternY = window.innerHeight / 2;
+    let wispX = window.innerWidth / 2;
+    let wispY = window.innerHeight / 2;
+
+    function init() {
+        SoundController.init();
+        const savedData = localStorage.getItem('dnd_deck_remaining');
+        activeDeck = savedData ? JSON.parse(savedData) : [...FULL_DECK_DATA];
+        
+        updateCountDisplay();
+        renderVisualDeck(); 
+        animateAtmosphere();
+    }
+
+    function adjustDrawCount(delta) {
+        const input = document.getElementById('draw-count');
+        let val = parseInt(input.value) + delta;
+        const max = parseInt(input.max);
+        if (val < 1) val = 1;
+        if (val > max) val = max;
+        input.value = val;
+    }
+
+    function updateCountDisplay() {
+        document.getElementById('deck-count-display').innerText = `Cards remaining: ${activeDeck.length}`;
+        document.getElementById('draw-count').max = activeDeck.length;
+    }
+
+    function saveState() {
+        localStorage.setItem('dnd_deck_remaining', JSON.stringify(activeDeck));
+    }
+
+    function fullReset() {
+        if(confirm("Reshuffle the entire deck?")) {
+            localStorage.removeItem('dnd_deck_remaining');
+            location.reload();
+        }
+    }
+
+    function renderVisualDeck() {
+        const container = document.getElementById('visual-deck');
+        container.innerHTML = '';
+        for(let i=0; i<activeDeck.length; i++) {
+            const div = document.createElement('div');
+            div.className = 'deck-card';
+            
+            // --- TEXTURE ON DECK PILE ---
+            const texture = document.createElement('div');
+            texture.className = 'card-texture';
+            div.appendChild(texture);
+            
+            div.style.zIndex = i;
+            container.appendChild(div);
+        }
+        startIdleDeckAnimation();
+    }
+
+    function startIdleDeckAnimation() {
+        const cards = document.querySelectorAll('.deck-card');
+        cards.forEach((card, i) => {
+            gsap.set(card, { rotation: (Math.random() * 6) - 3, x: (Math.random() * 4) - 2, y: (Math.random() * 4) - 2, z: i * 0.5 });
+            gsap.to(card, {
+                rotation: "+=" + (Math.random() * 4 - 2), x: "+=" + (Math.random() * 4 - 2), y: "+=" + (Math.random() * 2 - 1),
+                duration: 2 + Math.random() * 2, repeat: -1, yoyo: true, ease: "sine.inOut"
+            });
+        });
+    }
+
+    function stopIdleDeckAnimation() { gsap.killTweensOf(".deck-card"); }
+
+    function startDeal() {
+        const countInput = document.getElementById('draw-count');
+        let count = parseInt(countInput.value);
+        if (count > activeDeck.length) count = activeDeck.length;
+        if (count < 1) return;
+
+        stopIdleDeckAnimation();
+        gsap.to("#ui-layer", { opacity: 0, duration: 0.5, onComplete: () => {
+            document.getElementById('ui-layer').style.display = 'none';
+            dealNextCard(count);
+        }});
+    }
+
+    function dealNextCard(remaining) {
+        if (remaining <= 0) {
+            gsap.to("#visual-deck", { y: 1000, rotation: Math.random() * 20 - 10, duration: 1.2, ease: "back.in(0.5)" });
+            return;
+        }
+
+        const visualDeck = document.getElementById('visual-deck');
+        const topCardElement = visualDeck.lastElementChild; 
+        if (!topCardElement) return;
+
+        const rect = topCardElement.getBoundingClientRect();
+        const currentRotation = gsap.getProperty(topCardElement, "rotation");
+        topCardElement.remove();
+
+        SoundController.play('deal');
+        const card = document.createElement('div');
+        card.className = 'game-card';
+        card.dataset.state = "unknown"; 
+        card.style.left = rect.left + 'px';
+        card.style.top = rect.top + 'px';
+        
+        gsap.set(card, { rotation: currentRotation, scale: 1, zIndex: 1000 + (22 - remaining) }); 
+
+        // UPDATED HTML STRUCTURE (With Textures)
+        card.innerHTML = `
+            <div class="card-inner">
+                <div class="card-face face-back card-back-style">
+                    <div class="card-texture"></div>
+                </div>
+                <div class="card-face face-front">
+                    <div class="layer-art"></div>
+                    <div class="layer-frame"></div>
+                    <div class="card-texture"></div>
+                    <div class="card-glare"></div>
+                </div>
+            </div>
+        `;
+        
+        card.onclick = () => activateCard(card);
+        document.getElementById('void-container').appendChild(card);
+        drawQueue.push(card);
+
+        const tx = (window.innerWidth * 0.1) + Math.random() * (window.innerWidth * 0.8);
+        const ty = (window.innerHeight * 0.1) + Math.random() * (window.innerHeight * 0.6);
+        const rotEnd = (Math.random() * 90) - 45; 
+        const rotY = (Math.random() * 30) - 15; 
+
+        gsap.to(card, {
+            top: ty, left: tx, rotation: rotEnd, rotationY: rotY, scale: 1, y: 0,
+            duration: 0.8, ease: "power2.out", 
+            onComplete: () => {
+                gsap.to(card, {
+                    y: "-=30", rotation: "+=" + ((Math.random() * 10) - 5),
+                    rotationY: "+=" + ((Math.random() * 10) - 5),
+                    duration: 3 + Math.random(), yoyo: true, repeat: -1, ease: "sine.inOut"
+                });
+            }
+        });
+
+        const glare = card.querySelector('.card-glare');
+        const isRight = tx > (window.innerWidth / 2);
+        gsap.set(glare, { backgroundPosition: "0% 0%" }); 
+        gsap.fromTo(glare, 
+            { left: isRight ? "-150%" : "150%", top: "-50%", opacity: 0.6 },
+            { left: isRight ? "150%" : "-150%", duration: 0.8, ease: "power2.out" }
+        );
+
+        gsap.delayedCall(0.2, () => dealNextCard(remaining - 1));
+    }
+
+    function activateCard(card) {
+        if(isDeckLocked || currentFocusCard || card.dataset.state === "known") return; 
+        
+        const randIndex = Math.floor(Math.random() * activeDeck.length);
+        const cardData = activeDeck[randIndex];
+        
+        if (cardData.type === 'unique') {
+            activeDeck.splice(randIndex, 1);
+            saveState();
+        }
+
+        card.dataset.state = "known";
+        card.dataset.name = cardData.name;
+        card.dataset.desc = cardData.desc;
+        card.dataset.type = cardData.type;
+        
+        // --- INJECT IMAGES ---
+        const artLayer = card.querySelector('.layer-art');
+        artLayer.style.backgroundImage = `url('${cardData.img}')`;
+        
+        const frameLayer = card.querySelector('.layer-frame');
+        // FALLBACK: If no specific frame, use a default gold one
+        // Note: Using a placeholder URL for fallback logic demonstration
+        const frameURL = cardData.frame ? cardData.frame : 'https://placehold.co/1000x1400/transparent/d4af37?text=Gold+Frame';
+        frameLayer.style.backgroundImage = `url('${frameURL}')`;
+
+        currentFocusCard = card;
+        isInteractionEnabled = false; 
+
+        SoundController.play('flip');
+        gsap.killTweensOf(card);
+        const glare = card.querySelector('.card-glare');
+        gsap.killTweensOf(glare);
+
+        const centerX = (window.innerWidth / 2) - (200 / 2); 
+        const centerY = (window.innerHeight / 2) - (280 / 2) - 50;
+
+        const tl = gsap.timeline({ onComplete: () => { isInteractionEnabled = true; } });
+
+        tl.to(card, {
+            left: centerX, top: centerY, x: 0, y: 0, 
+            rotation: 0, rotationY: 0, scale: 1.8, zIndex: 20000, 
+            duration: 0.8, ease: "power3.inOut"
+        });
+
+        tl.addLabel("flipStart");
+        tl.to(card.querySelector('.card-inner'), { rotationY: 180, duration: 0.8, ease: "back.out(1.2)" }, "flipStart");
+
+        gsap.set(glare, { backgroundPosition: "0% 0%", transform: "rotate(20deg)" }); 
+        tl.fromTo(glare, 
+            { left: "-150%", top: "-50%", opacity: 0 },
+            { left: "150%", top: "100%", opacity: 0.8, duration: 0.8, ease: "power1.inOut" },
+            "flipStart"
+        );
+        tl.to(glare, { opacity: 0, duration: 0.3 }); 
+
+        tl.call(() => {
+            document.getElementById('card-title').innerText = card.dataset.name;
+            document.getElementById('card-desc').innerText = card.dataset.desc;
+            
+            const vanishMsg = document.getElementById('vanish-msg');
+            if(card.dataset.type === 'unique') {
+                vanishMsg.innerText = "(The card begins to burn...)";
+                vanishMsg.style.display = 'block';
+            } else {
+                vanishMsg.style.display = 'none';
+            }
+            
+            const nextBtn = document.getElementById('btn-next');
+            const choiceContainer = document.getElementById('choice-container');
+            const btnA = document.getElementById('btn-choice-a');
+            const btnB = document.getElementById('btn-choice-b');
+
+            nextBtn.style.display = 'block';
+            choiceContainer.style.display = 'none';
+
+            if (card.dataset.name === "Jester") {
+                nextBtn.style.display = 'none';
+                choiceContainer.style.display = 'flex';
+                btnA.innerText = "Gain 10,000 XP";
+                btnA.onclick = () => handleChoice('jester-safe');
+                btnB.innerText = "Draw 2 More Cards";
+                btnB.onclick = () => handleChoice('jester-risk');
+            }
+            else if (card.dataset.name === "Idiot") {
+                nextBtn.style.display = 'none';
+                choiceContainer.style.display = 'flex';
+                btnA.innerText = "Accept Fate";
+                btnA.onclick = () => handleChoice('idiot-safe');
+                btnB.innerText = "Draw 1 More Card";
+                btnB.onclick = () => handleChoice('idiot-risk');
+            }
+
+            document.getElementById('focus-overlay').classList.add('visible');
+            document.getElementById('controls-overlay').classList.add('visible');
+        });
+    }
+
+    document.addEventListener('mousemove', (e) => {
+        targetX = e.clientX;
+        targetY = e.clientY;
+        
+        const wisp = document.getElementById('cursor-wisp');
+        if(wisp) {
+            const isHoveringInteractive = e.target.closest('button') || e.target.closest('.game-card');
+            if(isHoveringInteractive) {
+                wisp.classList.add('hover-active');
+            } else {
+                wisp.classList.remove('hover-active');
+            }
+        }
+
+        if (!currentFocusCard || !isInteractionEnabled) return;
+
+        const xPct = (e.clientX / window.innerWidth - 0.5) * 2; 
+        const yPct = (e.clientY / window.innerHeight - 0.5) * 2;
+
+        gsap.to(currentFocusCard, {
+            rotationY: xPct * 15, rotationX: -yPct * 15,
+            duration: 0.5, ease: "power1.out"
+        });
+
+        const glare = currentFocusCard.querySelector('.card-glare');
+        gsap.to(glare, {
+            left: (xPct * 100) + "%", top: (yPct * 100) + "%",
+            opacity: 0.3 + (Math.abs(xPct) * 0.4), 
+            duration: 0.5, ease: "power1.out"
+        });
+        
+        const artLayer = currentFocusCard.querySelector('.layer-art');
+        if(artLayer) {
+            const parallaxIntensity = 5; 
+            const transformX = -(xPct * parallaxIntensity); 
+            const transformY = -(yPct * parallaxIntensity);
+            gsap.to(artLayer, {
+                xPercent: transformX, yPercent: transformY,
+                duration: 0.5, ease: "power1.out"
+            });
+        }
+    });
+
+    function animateAtmosphere() {
+        const lanternSpeed = 0.05; 
+        lanternX += (targetX - lanternX) * lanternSpeed;
+        lanternY += (targetY - lanternY) * lanternSpeed;
+
+        const vignette = document.querySelector('.vignette-layer');
+        if (vignette) {
+            vignette.style.setProperty('--cursor-x', lanternX + 'px');
+            vignette.style.setProperty('--cursor-y', lanternY + 'px');
+        }
+
+        const wispSpeed = 0.15;
+        wispX += (targetX - wispX) * wispSpeed;
+        wispY += (targetY - wispY) * wispSpeed;
+
+        const wisp = document.getElementById('cursor-wisp');
+        if (wisp) {
+            wisp.style.left = wispX + 'px';
+            wisp.style.top = wispY + 'px';
+        }
+
+        requestAnimationFrame(animateAtmosphere);
+    }
+
+    function discardAndNext() {
+        if(!currentFocusCard) return;
+        
+        document.getElementById('focus-overlay').classList.remove('visible');
+        document.getElementById('controls-overlay').classList.remove('visible');
+        document.getElementById('choice-container').style.display = 'none';
+        
+        const cardName = currentFocusCard.dataset.name;
+        const cardType = currentFocusCard.dataset.type;
+
+        if (cardName === "The Fool") {
+            animateDestruction(currentFocusCard, () => {
+                gsap.to("#visual-deck", { y: 0, duration: 0.5, ease: "back.out(1.0)", onComplete: () => {
+                    dealNextCard(1);
+                }});
+            });
+            return;
+        }
+
+        if (cardName === "The Void" || cardName === "Donjon") {
+            isDeckLocked = true; 
+            screenShake(); 
+            animateDestruction(currentFocusCard, () => {
+                nukeTableAndReset();
+            });
+            return;
+        }
+
+        if (cardType === 'unique') {
+            animateDestruction(currentFocusCard, cleanupCard);
+        } else {
+            SoundController.play('deal');
+            gsap.to(currentFocusCard, {
+                scale: 4, opacity: 0, duration: 0.6, ease: "power1.in",
+                onComplete: cleanupCard 
+            });
+        }
+    }
+
+    function nukeTableAndReset() {
+        const remaining = drawQueue.filter(c => c !== currentFocusCard);
+        remaining.forEach(c => {
+            gsap.to(c, { scale: 0, opacity: 0, duration: 0.5, ease: "back.in(1)" });
+        });
+        drawQueue = []; currentFocusCard = null;
+        
+        setTimeout(() => {
+            renderVisualDeck();
+            document.getElementById('ui-layer').style.display = 'block';
+            updateCountDisplay(); 
+            document.getElementById('draw-count').value = 1;
+            gsap.to("#visual-deck", { y: 0, duration: 1.2, ease: "back.out(0.7)" });
+            
+            gsap.to("#ui-layer", { opacity: 1, duration: 0.5, delay: 0.8, onComplete: () => { isDeckLocked = false; }});
+        }, 1200);
+    }
+
+    function animateDestruction(card, onComplete) {
+        SoundController.play('burn');
+        gsap.to(card, {
+            filter: "contrast(200%) brightness(150%) sepia(100%) hue-rotate(-30deg) blur(2px)",
+            duration: 1.5
+        });
+        gsap.to(card, {
+            scale: 0.8, opacity: 0, rotation: Math.random() * 20 - 10, y: "-=50",
+            duration: 2, ease: "power2.in", 
+            onComplete: () => {
+                card.style.display = 'none';
+                currentFocusCard = null;
+                if(onComplete) onComplete();
+            }
+        });
+    }
+
+    function cleanupCard() {
+        if(currentFocusCard) {
+            currentFocusCard.style.display = 'none';
+            currentFocusCard = null;
+        }
+        const remaining = drawQueue.filter(c => c.style.display !== 'none');
+        if(remaining.length === 0) {
+            setTimeout(() => {
+                renderVisualDeck();
+                gsap.set("#visual-deck", { y: 800, rotation: 0 }); 
+                gsap.to("#visual-deck", { y: 0, duration: 1.2, ease: "back.out(0.7)" });
+                document.getElementById('ui-layer').style.display = 'block';
+                updateCountDisplay(); 
+                document.getElementById('draw-count').value = 1;
+                gsap.to("#ui-layer", { opacity: 1, duration: 0.5, delay: 0.8 });
+                startIdleDeckAnimation();
+            }, 500);
+        }
+    }
+
+    function screenShake() {
+        const targets = ["body", "#ui-layer"];
+        gsap.fromTo(targets, 
+            { x: 0, y: 0 },
+            { 
+                x: 10, y: 10, duration: 0.5, 
+                ease: "rough({ template: none.out, strength: 1, points: 20, taper: 'none', randomize: true, clamp: false })",
+                clearProps: "x,y" 
+            }
+        );
+        const vignette = document.querySelector('.vignette-layer');
+        if(vignette) {
+            gsap.to(vignette, { backgroundColor: "rgba(100, 0, 0, 0.5)", duration: 0.1, yoyo: true, repeat: 3 });
+        }
+    }
+
+    function handleChoice(decision) {
+        document.getElementById('focus-overlay').classList.remove('visible');
+        document.getElementById('controls-overlay').classList.remove('visible');
+        document.getElementById('choice-container').style.display = 'none';
+        
+        if (decision === 'jester-safe' || decision === 'idiot-safe') {
+            animateDestruction(currentFocusCard, cleanupCard); 
+        } 
+        else if (decision === 'jester-risk') {
+            spawnExtraCards(2); 
+        } 
+        else if (decision === 'idiot-risk') {
+            spawnExtraCards(1);
+        }
+    }
+
+    function spawnExtraCards(amount) {
+        screenShake();
+        animateDestruction(currentFocusCard, () => {
+            gsap.to("#visual-deck", { 
+                y: 0, duration: 0.5, ease: "back.out(1.0)", 
+                onComplete: () => {
+                    dealNextCard(amount);
+                }
+            });
+        });
+    }
+
+    init();
+</script>
+</body>
+</html>
